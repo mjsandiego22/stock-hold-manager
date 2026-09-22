@@ -78,18 +78,16 @@ async function signup(){
   const det=role==='requester'?{division:g('div'),area:g('area'),sales_manager:g('sm')}:{bu:g('bu'),position:g('pos')};
   if(!email||!fn||!un||Object.values(det).some(v=>!v))return authMsg('Please complete every field.');
   if(p!==$('#p2').value)return authMsg('Passwords do not match.');
-  const {data,error}=await sb.auth.signUp({email,password:p});
-  if(error)return authMsg(error.message);
-  const uid=data.user&&data.user.id;
-  if(!uid)return authMsg('Check your inbox to confirm your email, then log in.',1);
-  const {error:pe}=await sb.from('profiles').insert({id:uid,username:un,full_name:fn,role,status:'pending',...det});
-  if(pe)return authMsg(pe.message.includes('duplicate')?'That username or email is already registered.':pe.message);
-  showAuth('login','Account submitted. An Admin must approve it before you can log in.',1)}
+  // Profile fields ride along as auth metadata; a database trigger creates the profiles row
+  // server-side the instant the account is created, so it works even before email is confirmed.
+  const {data,error}=await sb.auth.signUp({email,password:p,options:{data:{username:un,full_name:fn,role,...det}}});
+  if(error)return authMsg(error.message.includes('duplicate')||error.message.includes('registered')?'That email is already registered.':error.message);
+  showAuth('login',data.session?'Account submitted. An Admin must approve it before you can log in.':'Check your inbox to confirm your email, then log in. An Admin must approve the account afterward.',1)}
 
 async function login(){
   const email=g('u'),p=$('#p').value;
   const {data,error}=await sb.auth.signInWithPassword({email,password:p});
-  if(error)return authMsg('Invalid email or password.');
+  if(error)return authMsg(/confirm/i.test(error.message)?'Please confirm your email first — check your inbox for the link.':'Invalid email or password.');
   const {data:prof,error:pe}=await sb.from('profiles').select('*').eq('id',data.user.id).single();
   if(pe||!prof){await sb.auth.signOut();return authMsg('No profile found for this account. Contact an Admin.')}
   if(prof.status!=='active'){await sb.auth.signOut();return authMsg(prof.status==='disabled'?'This account is disabled. Contact an Admin.':'Your account is awaiting Admin approval.')}
