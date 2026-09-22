@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>Stock Hold Manager</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f5f6f8;--card:#fff;--tx:#1b1f24;--mu:#65707c;--bd:#dde1e6;--ac:#2255d4;--ok:#137a3f;--okb:#e2f4e9;--no:#b3261e;--nob:#fce9e7;--wa:#8a5a00;--wab:#fff0cf;--gr:#555;--grb:#eceef1}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171b;--card:#1d2126;--tx:#e8eaed;--mu:#9aa4af;--bd:#333a42;--ac:#7aa2ff;--ok:#6fd59a;--okb:#173324;--no:#ff8f86;--nob:#3a1d1a;--wa:#f3c56a;--wab:#3a2e12;--gr:#b4bcc5;--grb:#2a2f35}}
+:root[data-theme="dark"]{--bg:#14171b;--card:#1d2126;--tx:#e8eaed;--mu:#9aa4af;--bd:#333a42;--ac:#7aa2ff;--ok:#6fd59a;--okb:#173324;--no:#ff8f86;--nob:#3a1d1a;--wa:#f3c56a;--wab:#3a2e12;--gr:#b4bcc5;--grb:#2a2f35}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:14px}
+h1{font-size:18px;margin:0}h2{font-size:15px;margin:18px 0 8px}
+a{color:var(--ac)}
+.top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.tabs{display:flex;gap:4px;background:var(--grb);padding:3px;border-radius:9px;width:max-content;margin-bottom:12px}
+.tabs button{border:0;background:none;color:var(--mu);padding:6px 12px;border-radius:7px;font:inherit;cursor:pointer}
+.tabs button.on{background:var(--card);color:var(--tx);font-weight:600;box-shadow:0 1px 2px #0002}
+input,select,button{font:inherit;color:var(--tx)}
+input,select{background:var(--card);border:1px solid var(--bd);border-radius:7px;padding:6px 8px;min-width:0}
+.btn{border:1px solid var(--bd);background:var(--card);border-radius:7px;padding:6px 11px;cursor:pointer}
+.btn.p{background:var(--ac);border-color:var(--ac);color:#fff}.btn.ok{color:var(--ok);border-color:var(--ok)}.btn.no{color:var(--no);border-color:var(--no)}.btn.s{padding:3px 8px;font-size:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:10px}
+.auth{max-width:400px;margin:30px auto}.auth .btn.p{width:100%;margin:12px 0 8px}
+.fl{display:block;margin:8px 0 0;font-size:12px;color:var(--mu)}.fl input,.fl select{width:100%;margin-top:3px;font-size:14px;color:var(--tx)}
+.err{color:var(--no);margin-top:6px;min-height:1em}.okm{color:var(--ok)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.grow{flex:1 1 160px}
+.mu{color:var(--mu);font-size:12px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:10px}
+.stat b{display:block;font-size:22px}
+.chip{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;font-weight:600;background:var(--grb);color:var(--gr)}
+.chip.approved,.chip.active{background:var(--okb);color:var(--ok)}.chip.denied,.chip.expired,.chip.disabled{background:var(--nob);color:var(--no)}.chip.pending,.chip.partial{background:var(--wab);color:var(--wa)}
+.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:720px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--bd);vertical-align:top}th{font-size:12px;color:var(--mu);font-weight:600}
+.line{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--bd)}
+.bar{background:var(--wab);color:var(--wa);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:13px;word-break:break-word}
+.empty{text-align:center;color:var(--mu);padding:22px}
+</style></head><body><main>
+<div id="bar"></div><div id="auth"></div>
+<div id="app" hidden>
+<div class="top"><h1>📦 Stock Hold Manager</h1><div class="row"><span id="who" class="mu"></span><button class="btn s" data-act="logout">Log out</button></div></div>
+<div id="tabs"></div><div id="shell"></div><div id="data"></div></div>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const iso=d=>new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const today=()=>iso(new Date());
+const plus=n=>{const d=new Date();d.setDate(d.getDate()+n);return iso(d)};
+const dl=u=>Math.round((new Date(u+'T00:00:00')-new Date(today()+'T00:00:00'))/864e5);
+const fmt=u=>new Date(u+'T00:00:00').toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'});
+const ROLES={requester:'Requester',pm:'Product Manager',admin:'Admin'};
+const QS=['What was the name of your first pet?','In what city were you born?','What was the name of your first school?',"What is your mother's maiden name?"];
+// Default admin credential is stored only as a salted PBKDF2 hash. It must be changed on first login.
+const DEF={salt:'3sW37SyW7wVEHzdAKPboMQ==',hash:'VFJK4DfUlvdUzpHpu5rWrOK2FI6fLAPLyjBrUtfwzyg='};
+const MAX_ADMINS=3;
+let db,dlx,myId=null,accts=[],appr={},cfg=null,rows=[],me=null,atab='holds',fp=null,idle=null,unsubH=null,filt={q:'',st:''};
+const LK={};
+
+// ---------- crypto helpers
+const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b)));
+const unb=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const newSalt=()=>b64(crypto.getRandomValues(new Uint8Array(16)));
+async function pbk(pw,salt){const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveBits']);
+  return b64(await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt:unb(salt),iterations:120000},k,256))}
+const eq=(a,b)=>{a=String(a);b=String(b);let d=a.length^b.length;for(let i=0;i<Math.max(a.length,b.length);i++)d|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0);return d===0};
+const norm=s=>String(s).trim().toLowerCase();
+const genPw=()=>'Tmp-'+[...crypto.getRandomValues(new Uint8Array(10))].map(x=>'abcdefghjkmnpqrstuvwxyz23456789'[x%31]).join('');
+function pwErr(p,u){if(p.length<10)return 'Password must be at least 10 characters.';
+  if(!/[a-z]/.test(p)||!/[A-Z]/.test(p)||!/\d/.test(p))return 'Use upper case, lower case and a number.';
+  if(u&&p.toLowerCase().includes(u.toLowerCase()))return 'Password must not contain your username.';return ''}
+const banner=t=>{$('#bar').innerHTML=t?'<div class="bar">'+esc(t)+'</div>':''};
+const authMsg=(t,ok)=>{const m=$('#am');if(m){m.textContent=t;m.className='err'+(ok?' okm':'')}};
+const g=id=>{const e=$('#'+id);return e?e.value.trim():''};
+
+// ---------- init
+async function init(){
+  if(!window.crypto||!crypto.subtle){$('#auth').innerHTML='<div class="card auth">This browser cannot do secure hashing. Open the page over https.</div>';return}
+  try{db=await claude.use('db')}catch(e){}
+  try{const u=await claude.use('user');myId=u?await u.id():null}catch(e){}
+  try{dlx=await claude.use('downloads')}catch(e){}
+  if(!db){$('#auth').innerHTML='<div class="card auth"><b>Sign-in needs the shared database.</b><p class="mu">Open the published link while signed in to Claude.</p></div>';return}
+  const er=e=>banner('Database error: '+e.message);
+  db.collection('accounts').onSnapshot(s=>{accts=s.docs.map(d=>({id:d.id,...d.data()}));refresh()},er);
+  db.collection('approvals').onSnapshot(s=>{appr={};s.docs.forEach(d=>appr[d.id]=d.data());refresh()},er);
+  db.doc('config/admin').onSnapshot(s=>{cfg=s.exists?s.data():null;refresh()},er);
+  showAuth('login');
+}
+function refresh(){if(!me)return;
+  if(me.id!=="admin"){const a=appr[me.id];if(!a||a.status!=='active'||a.role!==me.role)return logout('Your access was changed by an Admin.')}
+  if(!(atab==='accounts'&&me.role==='admin'&&$('#shell').dataset.t!=='accounts'))data()}
+
+// ---------- auth screens
+const F=(id,l,t)=>`<label class="fl">${l}<input id="${id}" type="${t||'text'}" autocomplete="${t==='password'?'off':'off'}"></label>`;
+const QSEL=()=>`<label class="fl">Security question<select id="q">${QS.map(q=>`<option>${esc(q)}</option>`).join('')}</select></label>${F('ans','Answer')}`;
+function showAuth(v,msg,ok){$('#app').hidden=true;const a=$('#auth');a.hidden=false;let h='';
+  if(v==='login')h=`<h2>Sign in</h2>${F('u','Username')}${F('p','Password','password')}<button class="btn p" data-act="login">Log in</button><div class="row"><a href="#" data-act="go" data-v="forgot">Forgot password?</a><a href="#" data-act="go" data-v="signup">Create account</a></div>`;
+  if(v==='signup')h=`<h2>Create account</h2><label class="fl">Account type<select id="role"><option value="requester">Requester</option><option value="pm">Product Manager</option></select></label>
+  ${F('fn','Full name')}<div class="rq">${F('div','Division')}${F('area','Area')}${F('sm','Name of sales manager')}</div><div class="pm" hidden>${F('bu','BU #')}${F('pos','Position')}</div>
+  ${F('u','Username')}${F('p','Password','password')}${F('p2','Confirm password','password')}<div class="mu">10+ characters with upper case, lower case and a number.</div>${QSEL()}
+  <button class="btn p" data-act="signup">Submit for approval</button><a href="#" data-act="go" data-v="login">← Back to sign in</a>`;
+  if(v==='forgot')h=`<h2>Forgot password</h2>${F('u','Username')}<button class="btn p" data-act="fp1">Continue</button><a href="#" data-act="go" data-v="login">← Back to sign in</a>`;
+  if(v==='forgot2'){const q=fp.acc&&fp.acc.question?fp.acc.question:QS[0];h=`<h2>Reset password</h2><div class="mu">${esc(q)}</div>${F('ans','Your answer')}${F('p','New password','password')}${F('p2','Confirm new password','password')}<button class="btn p" data-act="fp2">Reset password</button><a href="#" data-act="go" data-v="login">← Back to sign in</a>`}
+  if(v==='change')h=`<h2>Set a new password</h2><div class="mu">${me.def?'The default admin password must be changed before you continue.':'An Admin reset your password. Choose a new one.'}</div>${F('p','New password','password')}${F('p2','Confirm new password','password')}${me.needQ?QSEL():''}<button class="btn p" data-act="chg">Save and continue</button>`;
+  a.innerHTML=`<div class="card auth">${h}<div id="am" class="err"></div></div>`;if(msg)authMsg(msg,ok);if(v==='signup'){const ex=accts.find(a=>a.id===myId);if(ex)authMsg(dupMsg(ex))}const f=a.querySelector('input');f&&f.focus()}
+
+const dupMsg=a=>'This Claude sign-in already has the account "'+a.username+'" (status: '+((appr[a.id]||{}).status||'pending')+'). Log in with it. To make another account (e.g. a Product Manager), an Admin can use Accounts → Add account.';
+async function signup(){
+  const role=g('role'),u=g('u'),p=$('#p').value,fn=g('fn');
+  const det=role==='requester'?{division:g('div'),area:g('area'),salesMgr:g('sm')}:{bu:g('bu'),position:g('pos')};
+  const ex=accts.find(a=>a.id===myId);
+  const err=!myId?'Could not identify your Claude sign-in.':ex?dupMsg(ex):!u||!fn||Object.values(det).some(v=>!v)?'Please complete every field.':
+    !/^[a-z0-9._-]{4,20}$/i.test(u)?'Username: 4–20 letters, numbers, . _ -':
+    norm(u)==='admin'||accts.some(a=>norm(a.username)===norm(u))?'That username is taken.':
+    p!==$('#p2').value?'Passwords do not match.':pwErr(p,u)||(!g('ans')?'Answer the security question.':'');
+  if(err)return authMsg(err);
+  const salt=newSalt(),as=newSalt();
+  try{await db.doc('accounts/'+myId).set({username:u,reqRole:role,name:fn,...det,salt,hash:await pbk(p,salt),question:g('q'),aSalt:as,aHash:await pbk(norm(g('ans')),as),pwAt:Date.now(),createdAt:Date.now()})}
+  catch(e){return authMsg('Could not save: '+(e.message||e.code))}
+  showAuth('login','Account submitted. An Admin must approve it before you can log in.',1)}
+
+const locked=k=>{const l=LK[k]||(LK[k]={n:0,until:0});return Date.now()<l.until?Math.ceil((l.until-Date.now())/6e4):0};
+const strike=k=>{const l=LK[k];if(++l.n>=5){l.until=Date.now()+3e5;l.n=0}};
+async function login(){
+  const un=norm(g('u')),p=$('#p').value,m=locked(un);
+  if(m)return authMsg('Too many attempts. Try again in '+m+' min.');
+  const adm=un==='admin';let acc=adm?(cfg&&cfg.hash?cfg:DEF):accts.find(a=>norm(a.username)===un);const ap=!adm&&acc?appr[acc.id]:null;
+  const good=await pbk(p,(acc||DEF).salt);
+  if(!acc||!eq(good,acc.hash)){strike(un);return authMsg('Invalid username or password.')}
+  LK[un].n=0;
+  if(!adm&&(!ap||ap.status!=='active'))return authMsg(ap&&ap.status==='disabled'?'This account is disabled. Contact an Admin.':'Your account is awaiting Admin approval.');
+  me=adm?{id:'admin',username:'admin',name:'Administrator',role:'admin',def:!(cfg&&cfg.hash),needQ:!(cfg&&cfg.aHash)}:{id:acc.id,username:acc.username,name:acc.name,role:ap.role,needQ:!acc.aHash};
+  if(adm?me.def:(ap.resetAt||0)>(acc.pwAt||0))return showAuth('change');
+  enter()}
+async function changePw(){
+  const p=$('#p').value,err=p!==$('#p2').value?'Passwords do not match.':pwErr(p,me.username)||(p==='12345677'?'Choose a different password.':'')||(me.needQ&&!g('ans')?'Answer the security question.':'');
+  if(err)return authMsg(err);
+  const salt=newSalt(),hash=await pbk(p,salt),pwAt=Date.now();
+  try{let qa={};if(me.needQ){const as=newSalt();qa={question:g('q'),aSalt:as,aHash:await pbk(norm(g('ans')),as)}}
+    if(me.id==='admin')await db.doc('config/admin').set({salt,hash,pwAt,...qa});else await db.doc('accounts/'+me.id).update({salt,hash,pwAt,...qa})}
+  catch(e){return authMsg(me.id==='admin'?'Saving admin credentials needs "Can edit" access to this page.':'Only the account holder\'s own Claude sign-in can change this. Ask an Admin.')}
+  me.def=false;me.needQ=false;enter()}
+function fp1(){const un=norm(g('u'));fp={un,acc:un==='admin'?(cfg&&cfg.aHash?cfg:null):accts.find(a=>norm(a.username)===un)};showAuth('forgot2')}
+async function fp2(){
+  const k='fp:'+fp.un,m=locked(k);if(m)return authMsg('Too many attempts. Try again in '+m+' min.');
+  const a=fp.acc,ah=await pbk(norm(g('ans')),(a&&a.aSalt)||DEF.salt),p=$('#p').value;
+  if(!a||!eq(ah,a.aHash)){strike(k);return authMsg('That answer does not match, or this account cannot be reset here. Contact an Admin.')}
+  const err=p!==$('#p2').value?'Passwords do not match.':pwErr(p,fp.un);if(err)return authMsg(err);
+  const salt=newSalt(),hash=await pbk(p,salt);
+  try{await db.doc(fp.un==='admin'?'config/admin':'accounts/'+a.id).update({salt,hash,pwAt:Date.now()})}
+  catch(e){return authMsg('For your security, a reset can only be completed from the account holder\'s own Claude sign-in. Ask an Admin to reset it.')}
+  showAuth('login','Password updated. Log in with your new password.',1)}
+
+// ---------- session
+function enter(){$('#auth').hidden=true;$('#auth').innerHTML='';$('#app').hidden=false;banner('');atab='holds';
+  $('#who').textContent=me.name+' · '+ROLES[me.role];
+  unsubH&&unsubH();unsubH=db.collection('holds').onSnapshot(s=>{rows=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>b.createdAt-a.createdAt);if(me)data()},e=>banner('Database error: '+e.message));
+  bump();shell()}
+function logout(msg){unsubH&&unsubH();unsubH=null;me=null;rows=[];clearTimeout(idle);banner('');showAuth('login',msg,1)}
+const bump=()=>{clearTimeout(idle);if(me)idle=setTimeout(()=>logout('Signed out after 10 minutes of inactivity.'),6e5)};
+const need=(...r)=>{if(!me||!r.includes(me.role))throw Error('You do not have permission to do that.')};
+
+// ---------- holds (same workflow as before)
+const lineSt=(r,l)=>l.st==='approved'&&dl(r.until)<0?'expired':l.st;
+const reqSt=r=>{const s=r.items.map(l=>l.st);if(s.includes('pending'))return 'pending';if(s.every(x=>x==='denied'))return 'denied';if(s.every(x=>x==='released'))return 'released';return s.includes('denied')?'partial':'approved'};
+const chip=s=>'<span class="chip '+s+'">'+s+'</span>';
+function tabs(){$('#tabs').innerHTML=me.role==='admin'?'<div class="tabs">'+[['holds','Holds'],['accounts','Accounts']].map(([k,v])=>`<button data-tab="${k}" class="${k===atab?'on':''}">${v}</button>`).join('')+'</div>':''}
+function shell(){tabs();const s=$('#shell');s.dataset.t=atab;
+  if(me.role==='requester'){s.innerHTML=`<div class="card"><h2 style="margin-top:0">New hold request</h2>
+  <div class="row"><input id="grp" class="grow" list="grps" placeholder="Group / brand (e.g. LENOVO-NB)"><datalist id="grps"><option>LENOVO-NB</option><option>LENOVO-LN</option></datalist>
+  <label class="mu">Hold until <input id="until" type="date" min="${today()}" value="${plus(4)}"></label><input id="why" class="grow" placeholder="Reason" value="Part of Order Plan"></div>
+  <div id="lines" style="margin-top:8px"></div><div class="row" style="margin-top:8px"><button class="btn s" data-act="addline">+ Add item</button><button class="btn p" data-act="submit">Submit for approval</button><span id="msg" class="mu"></span></div></div>`;addLine()}
+  else if(me.role==='admin'&&atab==='holds'){s.innerHTML=`<div id="stats"></div><div class="row" style="margin-bottom:8px"><input id="q" class="grow" placeholder="Search item code, ref, requester…" value="${esc(filt.q)}">
+  <select id="st"><option value="">All statuses</option>${['pending','approved','expired','denied','released'].map(x=>`<option${filt.st===x?' selected':''}>${x}</option>`).join('')}</select><button class="btn" data-act="csv">⬇ Export CSV</button></div>`}
+  else if(me.role==='admin'){s.innerHTML=`<div class="card"><b>Add an account</b> <span class="mu">— for extra or test accounts (max ${MAX_ADMINS} Admins). The person who logs in must have "Can edit" access to this page to set their own password.</span>
+  <label class="fl">Account type<select id="arole"><option value="requester">Requester</option><option value="pm">Product Manager</option><option value="admin">Admin</option></select></label>
+  <div class="row">${F('nu','Username')}${F('nn','Full name')}</div><div class="rq">${F('adiv','Division')}${F('aarea','Area')}${F('asm','Name of sales manager')}</div><div class="pm" hidden>${F('abu','BU #')}${F('apos','Position')}</div>
+  <button class="btn p" data-act="addadm" style="margin-top:12px">Create account</button><div id="am" class="err"></div></div>`}
+  else s.innerHTML='';data()}
+function addLine(){const d=document.createElement('div');d.className='line';
+  d.innerHTML='<input class="grow c" placeholder="Item code / description"><input class="q" type="number" min="1" placeholder="Qty" style="width:80px"><input class="grow m" placeholder="Remarks (optional)">';$('#lines').appendChild(d)}
+function data(){if(!me)return;const d=$('#data');
+  if(me.role==='requester'){const mine=rows.filter(r=>r.uid===me.username);d.innerHTML='<h2>My requests</h2>'+(mine.length?mine.slice(0,20).map(reqCard).join(''):'<div class="empty">No requests yet.</div>')}
+  else if(me.role==='pm'){const p=rows.filter(r=>reqSt(r)==='pending');d.innerHTML='<h2>Waiting for approval ('+p.length+')</h2>'+(p.length?p.map(pmCard).join(''):'<div class="empty">Nothing pending 🎉</div>')}
+  else if(atab==='accounts')acctData(d);else adminData(d)}
+const age=r=>{const n=Math.floor((Date.now()-r.createdAt)/864e5);return n>0?n+'d waiting':'today'};
+function reqCard(r){return `<div class="card"><div class="row"><b>${esc(r.ref)}</b> ${esc(r.group)} ${chip(reqSt(r))}<span class="mu">until ${fmt(r.until)}</span></div>`+
+  r.items.map(l=>`<div class="line"><span class="grow">${esc(l.code)}</span><b>${esc(l.qty)}</b><span class="mu">${esc(l.remarks)}${l.note?' · PM: '+esc(l.note):''}</span>${chip(lineSt(r,l))}</div>`).join('')+'</div>'}
+function pmCard(r){return `<div class="card"><div class="row"><b>${esc(r.ref)}</b> ${esc(r.group)}<span class="mu">hold until ${fmt(r.until)} · ${esc(r.reason)} · from ${esc(r.by)} · ${age(r)}</span></div>`+
+  r.items.map((l,i)=>`<div class="line"><span class="grow">${esc(l.code)}</span><b>${esc(l.qty)}</b><span class="mu">${esc(l.remarks)}</span>`+
+  (l.st==='pending'?`<button class="btn s ok" data-act="dec" data-id="${esc(r.id)}" data-i="${i}" data-v="approved">Approve</button><button class="btn s no" data-act="dec" data-id="${esc(r.id)}" data-i="${i}" data-v="denied">Deny</button>`:chip(l.st))+'</div>').join('')+
+  `<div class="row" style="margin-top:8px"><input id="note-${esc(r.id)}" class="grow" placeholder="Note to requester (optional)"><button class="btn ok" data-act="dec" data-id="${esc(r.id)}" data-i="all" data-v="approved">Approve all</button><button class="btn no" data-act="dec" data-id="${esc(r.id)}" data-i="all" data-v="denied">Deny all</button></div></div>`}
+function flat(){return rows.flatMap(r=>r.items.map((l,i)=>({r,l,i,st:lineSt(r,l)})))}
+function adminData(d){const all=flat(),act=all.filter(x=>x.st==='approved');
+  $('#stats').innerHTML=`<div class="stats"><div class="card stat"><b>${act.reduce((a,x)=>a+(+x.l.qty||0),0)}</b><span class="mu">units on hold now</span></div><div class="card stat"><b>${all.filter(x=>x.st==='pending').length}</b><span class="mu">lines awaiting approval</span></div><div class="card stat"><b>${act.filter(x=>dl(x.r.until)<=2).length}</b><span class="mu">expiring in ≤2 days</span></div><div class="card stat"><b>${all.filter(x=>x.st==='expired').length}</b><span class="mu">expired, not released</span></div></div>`;
+  const q=filt.q.toLowerCase(),list=all.filter(x=>(!filt.st||x.st===filt.st)&&(!q||(x.l.code+x.r.ref+x.r.by+x.r.group).toLowerCase().includes(q)));
+  const sku={};act.forEach(x=>sku[x.l.code]=(sku[x.l.code]||0)+(+x.l.qty||0));
+  d.innerHTML=`<div class="card scroll"><table><tr><th>Ref</th><th>Item code</th><th>Qty</th><th>Hold until</th><th>Status</th><th>Requested by</th><th></th></tr>`+
+  (list.length?list.map(x=>{const n=dl(x.r.until),live=x.st==='approved'||x.st==='expired';return `<tr><td>${esc(x.r.ref)}<div class="mu">${esc(x.r.group)}</div></td><td>${esc(x.l.code)}<div class="mu">${esc(x.l.remarks)}</div></td><td><b>${esc(x.l.qty)}</b></td><td>${fmt(x.r.until)}<div class="mu">${live?(n<0?-n+'d overdue':n+'d left'):''}</div></td><td>${chip(x.st)}</td><td>${esc(x.r.by)}</td>
+  <td>${live?`<button class="btn s" data-act="release" data-id="${esc(x.r.id)}" data-i="${x.i}">Release</button> <button class="btn s" data-act="rehold" data-id="${esc(x.r.id)}" data-i="${x.i}">Rehold</button>`:''}</td></tr>`}).join(''):'<tr><td colspan="7" class="empty">No matching holds.</td></tr>')+
+  `</table></div><h2>Reserved per item code (active holds)</h2><div class="card">`+(Object.keys(sku).length?Object.entries(sku).map(([k,v])=>`<div class="line"><span class="grow">${esc(k)}</span><b>${v}</b></div>`).join(''):'<span class="mu">None</span>')+'</div>';window._list=list}
+
+// ---------- admin: accounts
+function acctData(d){
+  const L=[{id:'admin',username:'admin',name:'Default administrator',reqRole:'admin',st:'active',role:'admin',det:'—',def:1},...accts.map(a=>{const p=appr[a.id]||{};return {...a,st:p.status||'pending',role:p.role,det:a.reqRole==='pm'?'BU '+(a.bu||'')+' · '+(a.position||''):(a.division||'')+' · '+(a.area||'')+' · Mgr: '+(a.salesMgr||'')}})];
+  d.innerHTML='<div class="card scroll"><table><tr><th>Username</th><th>Name</th><th>Role</th><th>Details</th><th>Status</th><th></th></tr>'+L.map(a=>{const id=esc(a.id),b=(v,t,c)=>`<button class="btn s ${c||''}" data-act="acct" data-id="${id}" data-v="${v}">${t}</button> `;
+    return `<tr><td>${esc(a.username)}</td><td>${esc(a.name)}</td><td>${ROLES[a.role||a.reqRole]||esc(a.reqRole)}${a.st==='pending'?' <span class="mu">(requested)</span>':''}</td><td class="mu">${esc(a.det)}</td><td>${chip(a.st)}</td><td>`+
+    (a.def?'':(a.st==='pending'?b('approve','Approve','ok')+b('reject','Reject','no'):a.st==='active'?b('disable','Disable','no')+b('reset','Reset password'):b('enable','Enable','ok')+b('reset','Reset password'))+b('delete','Delete','no'))+'</td></tr>'}).join('')+'</table></div><div class="mu">Passwords are never shown. Reset gives a one-time temporary password that must be changed at next login.</div>'}
+async function acct(id,v){need('admin');const a=accts.find(x=>x.id===id),p=appr[id]||{},now=Date.now();if(!a)return;
+  if(v==='approve')await db.doc('approvals/'+id).set({status:'active',role:a.reqRole==='pm'?'pm':'requester',by:me.username,at:now,resetAt:0});
+  else if(v==='reject'||v==='disable')await db.doc('approvals/'+id).set({...p,status:'disabled',by:me.username,at:now});
+  else if(v==='enable')await db.doc('approvals/'+id).set({...p,status:'active',by:me.username,at:now});
+  else if(v==='reset'){const t=genPw(),salt=newSalt();await db.doc('accounts/'+id).update({salt,hash:await pbk(t,salt)});await db.doc('approvals/'+id).set({...p,resetAt:now});banner('Temporary password for '+a.username+': '+t+'  (shown once — share it privately)')}
+  else if(v==='delete'&&confirm('Delete account '+a.username+'?')){await db.doc('approvals/'+id).delete();await db.doc('accounts/'+id).delete()}}
+async function addAcct(){need('admin');const role=g('arole'),u=g('nu'),n=g('nn');
+  const det=role==='requester'?{division:g('adiv'),area:g('aarea'),salesMgr:g('asm')}:role==='pm'?{bu:g('abu'),position:g('apos')}:{};
+  const cnt=1+Object.values(appr).filter(a=>a.role==='admin').length;
+  const err=!u||!n||Object.values(det).some(v=>!v)?'Please complete every field.':!/^[a-z0-9._-]{4,20}$/i.test(u)?'Username: 4–20 letters, numbers, . _ -':norm(u)==='admin'||accts.some(a=>norm(a.username)===norm(u))?'That username is taken.':role==='admin'&&cnt>=MAX_ADMINS?'Admin limit reached ('+MAX_ADMINS+').':'';
+  if(err)return authMsg(err);const id='acc'+Date.now().toString(36),t=genPw(),salt=newSalt(),now=Date.now();
+  try{await db.doc('accounts/'+id).set({username:u,reqRole:role,name:n,...det,salt,hash:await pbk(t,salt),question:'',aSalt:'',aHash:'',pwAt:0,createdAt:now});
+    await db.doc('approvals/'+id).set({status:'active',role,by:me.username,at:now,resetAt:now});
+    banner(ROLES[role]+' account "'+u+'" created. Temporary password: '+t+'  (shown once — they must change it at first login)');['nu','nn','adiv','aarea','asm','abu','apos'].forEach(k=>{const e=$('#'+k);if(e)e.value=''});authMsg('')}
+  catch(e){authMsg('Only people with "Can edit" access can create accounts.')}}
+
+// ---------- hold actions
+async function decide(id,i,v){need('pm');const r=rows.find(x=>x.id===id),n=($('#note-'+id)||{}).value||'';
+  await db.doc('holds/'+id).update({items:r.items.map((l,k)=>(i==='all'||+i===k)&&l.st==='pending'?{...l,st:v,by:me.name,uid:me.username,at:Date.now(),note:n}:l)})}
+async function setLine(id,i,patch){need('admin');const r=rows.find(x=>x.id===id);await db.doc('holds/'+id).update({items:r.items.map((l,k)=>k===+i?{...l,...patch}:l)})}
+const newRef=()=>'HS-'+today().replace(/-/g,'').slice(2)+'-'+[...crypto.getRandomValues(new Uint8Array(3))].map(x=>'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[x%32]).join('');
+const mk=(gp,u,why,items)=>({ref:newRef(),group:gp,until:u,reason:why,by:me.name,uid:me.username,createdAt:Date.now(),items:items.map(x=>({remarks:'',...x,st:'pending'}))});
+async function submit(){need('requester');const gp=g('grp'),u=g('until'),why=g('why'),m=$('#msg');
+  const items=[...document.querySelectorAll('#lines .line')].map(d=>({code:d.querySelector('.c').value.trim(),qty:Math.floor(+d.querySelector('.q').value),remarks:d.querySelector('.m').value.trim()})).filter(x=>x.code&&x.qty>0);
+  if(!gp||!u||dl(u)<0||!items.length){m.textContent='Add a group, a valid date and at least one item with a quantity.';return}
+  await db.collection('holds').add(mk(gp,u,why,items));shell();$('#msg').textContent='Submitted ✔'}
+async function csv(){need('admin');const list=window._list||[];if(!dlx)return banner('Downloads are not available in this view.');
+  const H=['Ref','Group','Item code','Qty','Remarks','Reason','Hold until','Status','Requested by','Requested on','Decided by','Decided on','Note'];
+  const q=v=>{v=String(v==null?'':v);if(/^[=+\-@\t\r]/.test(v))v="'"+v;return '"'+v.replace(/"/g,'""')+'"'};
+  const body=list.map(x=>[x.r.ref,x.r.group,x.l.code,x.l.qty,x.l.remarks,x.r.reason,x.r.until,x.st,x.r.by,iso(new Date(x.r.createdAt)),x.l.by||'',x.l.at?iso(new Date(x.l.at)):'',x.l.note||''].map(q).join(','));
+  try{await dlx.save({filename:'stock-holds-'+today()+'.csv',data:'\ufeff'+[H.map(q).join(','),...body].join('\r\n')})}catch(e){if(e.code!=='declined')banner('Export failed: '+e.message)}}
+
+// ---------- events
+document.addEventListener('click',async e=>{bump();
+  const t=e.target.closest('[data-tab],[data-act]');if(!t)return;if(t.tagName==='A')e.preventDefault();
+  try{if(t.dataset.tab){atab=t.dataset.tab;banner('');return shell()}
+  const a=t.dataset.act,{id,i,v}=t.dataset;
+  if(a==='go')return showAuth(v);if(a==='login')return await login();if(a==='signup')return await signup();if(a==='fp1')return fp1();if(a==='fp2')return await fp2();if(a==='chg')return await changePw();
+  if(a==='logout')return logout('You have been logged out.');
+  if(a==='addline')addLine();else if(a==='submit')await submit();else if(a==='dec')await decide(id,i,v);
+  else if(a==='release')await setLine(id,i,{st:'released',by:me.name,at:Date.now()});
+  else if(a==='rehold'){need('admin');const r=rows.find(x=>x.id===id),l=r.items[i];await db.collection('holds').add(mk(r.group,plus(7),r.reason,[{code:l.code,qty:l.qty,remarks:'REHOLD'}]));banner('Rehold request created (7 days) and sent to the Product Manager queue.')}
+  else if(a==='csv')await csv();else if(a==='acct')await acct(id,v);else if(a==='addadm')await addAcct();
+  }catch(err){banner('Action failed: '+(err.message||err.code||err))}});
+document.addEventListener('input',e=>{bump();if(e.target.id==='q'){filt.q=e.target.value;data()}});
+document.addEventListener('change',e=>{if(e.target.id==='st'){filt.st=e.target.value;data()}
+  if(e.target.id==='arole'){const s=$('#shell');s.querySelector('.rq').hidden=e.target.value!=='requester';s.querySelector('.pm').hidden=e.target.value!=='pm'}
+  if(e.target.id==='role'){document.querySelector('.rq').hidden=e.target.value!=='requester';document.querySelector('.pm').hidden=e.target.value!=='pm'}});
+document.addEventListener('keydown',e=>{bump();if(e.key==='Enter'&&e.target.closest('#auth')){const b=document.querySelector('#auth .btn.p');b&&b.click()}});
+init();
+</script></body></html>
